@@ -79,3 +79,47 @@ depth layers.
 Note: webcam depth is relative — the point cloud is correctly shaped but
 arbitrarily scaled. The sweep mode uses the turntable assumption (camera spinning
 around a centered subject), not full pose estimation.
+
+## Free-motion 3D scan (SfM)
+
+Instead of the turntable sweep, you can move the camera freely around a
+stationary, textured object. This uses [COLMAP](https://colmap.github.io/) for
+offline pose estimation, then aligns each frame's Depth-Anything cloud to the
+recovered poses. COLMAP runs in-process via pip:
+
+```bash
+pip install pycolmap      # primary backend (in-process COLMAP)
+# alternative: brew install colmap   # the standalone `colmap` binary
+```
+
+Two steps, or one command:
+
+```bash
+# 1. capture a session (live preview; press 'c' to add a frame, 'q' to finish)
+.venv/bin/scan-depth --capture my_object
+
+# 2. estimate poses (COLMAP) + fuse depth into a colored cloud
+.venv/bin/scan-depth --sfm my_object -o scan.ply
+```
+
+Or in one shot, capture then immediately fuse:
+
+```bash
+.venv/bin/scan-depth --capture my_object && .venv/bin/scan-depth --sfm my_object -o scan.ply
+```
+
+Capture tips (this matters most for quality):
+
+- keep the camera moving slowly with ~60–80% overlap between consecutive frames;
+  the tool warns when consecutive captures differ too much
+- aim for 15–30 frames covering the full surface
+- the object must be static, textured, and shadow-free in even lighting — blank
+  walls and fuzzy or glasslike surfaces will make COLMAP fail
+- avoid large motions; rotate or translate smoothly around the subject
+
+`--sfm` reads a `depth/` folder next to the images if present (written by
+`--capture`), otherwise it re-runs Depth-Anything per frame. Tuning: `--voxel`
+(downsample size, `<=0` = auto), `--stride`, `--keep`, `--bg-ratio` (cull each
+frame's pixels farther than `R` x its median SfM-tracked depth; Depth-Anything's
+relative depth has an unbounded far end, `0` disables), `--sfm-backend`
+(`auto`/`pycolmap`/`colmap`), `--colmap-bin`.

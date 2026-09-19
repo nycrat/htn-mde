@@ -11,6 +11,7 @@ import numpy as np
 
 from .pipeline import depth_to_bgr, normalize_depth
 from .predictor import DepthPredictor
+from .sfm import capture_session, fuse_session, run_colmap
 
 
 @dataclass(frozen=True)
@@ -21,7 +22,7 @@ class CameraIntrinsics:
     cy: float
 
     @staticmethod
-    def from_fov(width: int, height: int, fov_deg: float = 60.0) -> "CameraIntrinsics":
+    def from_fov(width: int, height: int, fov_deg: float = 60.0) -> CameraIntrinsics:
         f = (width / 2.0) / np.tan(np.radians(fov_deg) / 2.0)
         return CameraIntrinsics(f, f, width / 2.0, height / 2.0)
 
@@ -41,7 +42,10 @@ def unproject(
     depth is fine: the result is a correctly-shaped, arbitrarily-scaled model.
     """
     h, w = depth.shape[:2]
-    keep_lo, keep_hi = np.quantile(depth, float(keep[0])), np.quantile(depth, float(keep[1]))
+    finite = depth[np.isfinite(depth)]
+    if finite.size == 0:
+        return np.empty((0, 3), dtype=np.float32), np.empty((0, 3), dtype=np.uint8)
+    keep_lo, keep_hi = np.quantile(finite, float(keep[0])), np.quantile(finite, float(keep[1]))
     valid = np.isfinite(depth) & (depth >= keep_lo) & (depth <= keep_hi)
 
     ys, xs = np.mgrid[0:h:stride, 0:w:stride]
@@ -61,7 +65,7 @@ def unproject(
 
 def write_ply(path: str | Path, pts: np.ndarray, rgb: np.ndarray) -> Path:
     path = Path(path)
-    n = int(len(pts))
+    n = len(pts)
     header = (
         "ply\n"
         "format binary_little_endian 1.0\n"
@@ -243,6 +247,32 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("-o", "--out", default="scan.ply", help="output .ply path (default scan.ply)")
     p.add_argument("--image", metavar="PATH", help="scan a single image instead of the webcam")
+    p.add_argument(
+        "--capture",
+        nargs="?",
+        const="_auto_",
+        default=None,
+        metavar="DIR",
+        help="interactively capture a scan session (default snapshots/session_<ts>)",
+    )
+    p.add_argument(
+        "--sfm",
+        metavar="DIR",
+        help="free-motion scan: run COLMAP pose estimation + depth fusion on a captured session dir",
+    )
+    p.add_argument("--colmap-bin", metavar="PATH", default="colmap", help="path to the COLMAP binary")
+    p.add_argument(
+        "--sfm-backend",
+        choices=["auto", "pycolmap", "colmap"],
+        default="auto",
+        help="pose estimator backend: auto = pycolmap wheel if installed else colmap CLI (default auto)",
+    )
+    p.add_argument(
+        "--voxel",
+        type=float,
+        default=0.0,
+        help="voxel downsample size in model units (<=0: auto, default 0)",
+    )
     p.add_argument("--sweep", type=int, default=0, metavar="N", help="capture N frames in a ~360deg sweep")
     p.add_argument("--source", type=int, default=0, help="webcam device index (default 0)")
     p.add_argument("--encoder", choices=["vits", "vitb", "vitl"], default="vitb", help="model size")
@@ -257,6 +287,14 @@ def build_parser() -> argparse.ArgumentParser:
         metavar=("LO", "HI"),
         help="keep depth within these per-frame quantiles (default 0.01 0.99)",
     )
+    p.add_argument(
+        "--bg-ratio",
+        type=float,
+        default=2.0,
+        metavar="R",
+        help="drop pixels farther than R x the median SfM-tracked depth "
+        "(0 disables; default 2.0)",
+    )
     p.add_argument("--interval", type=float, default=0.6, help="seconds between sweep frames")
     p.add_argument("--no-preview", action="store_true", help="disable the live preview window")
     return p
@@ -268,7 +306,40 @@ def main(argv: list[str] | None = None) -> int:
         predictor = DepthPredictor(encoder=args.encoder, input_size=args.input_size)
         print(f"[setup] device={predictor.device} encoder={args.encoder} input={predictor.input_size}")
 
-        if args.image:
+        if args.sfm:
+            session = Path(args.sfm)
+            if not session.is_dir():
+                raise ValueError(f"Session dir not found: {session}")
+            images_dir = session / "images"
+            if not images_dir.is_dir():
+                images_dir = session
+            print(f"[sfm] images: {images_dir}")
+            sparse_dir = session / "colmap" / "sparse" / "0"
+            if not (sparse_dir / "images.txt").is_file():
+                sparse_dir = run_colmap(
+                    images_dir,
+                    session / "colmap",
+                    binary=args.colmap_bin,
+                    backend=args.sfm_backend,
+                )
+            else:
+                print(f"[sfm] reusing existing sparse model: {sparse_dir}")
+            pts, rgb = fuse_session(
+                images_dir,
+                sparse_dir,
+                predictor,
+                stride=args.stride,
+                keep=tuple(args.keep),
+                voxel=args.voxel,
+                bg_ratio=args.bg_ratio,
+            )
+            write_ply(args.out, pts, rgb)
+        elif args.capture is not None:
+            out_dir = Path(args.capture) if args.capture != "_auto_" else None
+            capture_session(predictor, source=args.source, out_dir=out_dir)
+            print("[done] move to another angle, capture more frames, then run --sfm on the session dir")
+            return 0
+        elif args.image:
             w = cv2.imread(args.image)
             if w is None:
                 raise RuntimeError(f"Could not read image {args.image}")

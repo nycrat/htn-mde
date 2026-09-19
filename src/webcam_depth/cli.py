@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .predictor import DepthPredictor
 from .pipeline import run_single_image, run_webcam
+from .predictor import DepthPredictor
 
 
 def build_parser() -> argparse.ArgumentParser:
