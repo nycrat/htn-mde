@@ -27,6 +27,49 @@ class CameraIntrinsics:
         return CameraIntrinsics(f, f, width / 2.0, height / 2.0)
 
 
+def probe_cameras(max_index: int = 10) -> list[dict[str, int | float | str]]:
+    """List camera device indices this OpenCV build can open (macOS: includes
+    Continuity Camera iPhones). Each probe grabs a frame and reports size/FPS."""
+    desc_prop = getattr(cv2, "CAP_PROP_DEVICE_DESCRIPTION", None)
+    found: list[dict[str, int | float | str]] = []
+    misses = 0
+    for idx in range(max_index + 1):
+        cap = cv2.VideoCapture(idx)
+        if not cap.isOpened():
+            cap.release()
+            misses += 1
+            if misses >= 3:
+                break
+            continue
+        misses = 0
+        gave_frame = False
+        ok, frame = cap.read()
+        gave_frame = ok and frame is not None
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        name = ""
+        if desc_prop is not None:
+            try:
+                name = str(cap.get(desc_prop))
+            except cv2.error:
+                name = ""
+        if not name:
+            name = "AVFoundation device"
+        cap.release()
+        found.append(
+            {
+                "index": idx,
+                "name": name,
+                "width": w,
+                "height": h,
+                "fps": fps,
+                "frame": gave_frame,
+            }
+        )
+    return found
+
+
 def unproject(
     frame_bgr: np.ndarray,
     depth: np.ndarray,
@@ -275,6 +318,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--sweep", type=int, default=0, metavar="N", help="capture N frames in a ~360deg sweep")
     p.add_argument("--source", type=int, default=0, help="webcam device index (default 0)")
+    p.add_argument(
+        "--probe-cameras",
+        action="store_true",
+        help="list available camera devices (indices usable with --source), then exit",
+    )
     p.add_argument("--encoder", choices=["vits", "vitb", "vitl"], default="vitb", help="model size")
     p.add_argument("--input-size", type=int, default=518, help="model input resolution")
     p.add_argument("--fov", type=float, default=60.0, help="assumed horizontal camera FOV in degrees")
@@ -303,6 +351,31 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.probe_cameras:
+            devices = probe_cameras()
+            if not devices:
+                print("[probe] no camera devices found")
+                return 1
+            print(f"[probe] {len(devices)} camera device(s):")
+            for d in devices:
+                tag = ""
+                if not d["frame"]:
+                    tag = " (opened, frame grab FAILED)"
+                print(
+                    f"  --source {d['index']}: {d['name']} "
+                    f"@ {d['width']}x{d['height']} {d['fps']:.0f}fps{tag}"
+                )
+            print("[probe] point --source at the index of your wanted camera, e.g. --source 1")
+            failed = [d for d in devices if not d["frame"]]
+            if failed:
+                print(
+                    "[probe] some devices enumerate but fail to grab frames — macOS "
+                    "Continuity Camera support needs a newer OpenCV/AVFoundation build. "
+                    "Workaround: shoot stills in the iPhone Camera app, AirDrop them into "
+                    "the session's images/ folder, then run --sfm on it."
+                )
+            return 0
+
         predictor = DepthPredictor(encoder=args.encoder, input_size=args.input_size)
         print(f"[setup] device={predictor.device} encoder={args.encoder} input={predictor.input_size}")
 

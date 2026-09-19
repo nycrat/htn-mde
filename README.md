@@ -27,9 +27,17 @@ First run downloads the model weights (~100-350 MB) into your HuggingFace cache.
 .venv/bin/webcam-depth --input-size 616    # finer detail, slower
 .venv/bin/webcam-depth --image photo.jpg   # one-shot depth map, no camera needed
 .venv/bin/webcam-depth --record out.mp4    # save the processed stream
+.venv/bin/webcam-depth --probe-cameras     # list available camera devices + indexes
 ```
 
 Controls in the live view: `q` quit, `s` save a snapshot into `snapshots/`.
+
+Camera selection: pass `--source N` to use device `N`. On macOS, `--probe-cameras`
+lists what OpenCV can see — this includes the built-in webcam and, when enabled
+via **Continuity Camera**, your iPhone (wireless or USB). Frame grab on the
+Continuity device can be flaky with older OpenCV wheels; if it fails, the most
+reliable path is to shoot stills in the iPhone Camera app, AirDrop them into the
+session's `images/` folder, and run `--sfm` on the session.
 
 ## Model options
 

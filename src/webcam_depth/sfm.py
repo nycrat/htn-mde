@@ -426,21 +426,19 @@ def fuse_session(
             skipped.append(image.name)
             continue
 
-        src = np.asarray(
-            [rec.points3d[pid].xyz for _px, _py, _z, pid in samples],
-            dtype=np.float64,
-        )
         h, w = depth.shape[:2] if hasattr(depth, "shape") else (0, 0)
         instr = camera.intrinsics()
-        dst = []
-        for px, py, _z, _pid in samples:
+        src, dst = [], []
+        for px, py, _z, pid in samples:
             if 0 <= px < w and 0 <= py < h:
                 d = float(depth[py, px])
                 if np.isfinite(d) and d > 0.0:
+                    src.append(rec.points3d[pid].xyz)
                     dst.append([(px - instr.cx) * d / instr.fx, (py - instr.cy) * d / instr.fy, d])
         if len(dst) < 3:
             skipped.append(image.name)
             continue
+        src = np.asarray(src, dtype=np.float64)
         dst = np.asarray(dst, dtype=np.float64)
         max_track_depth = float(np.median(dst[:, 2]))  # robust object-depth reference
 
