@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 webcam-depth = "webcam_depth.cli:main"
+scan-depth = "webcam_depth.scan:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

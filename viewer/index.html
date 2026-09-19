@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>webcam-depth &middot; point cloud viewer</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0f13; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #app { position: fixed; inset: 0; touch-action: none; }
+  #hud {
+    position: fixed; top: 14px; left: 14px; z-index: 5;
+    color: #e8edf3; font-size: 12px; line-height: 1.7;
+    background: rgba(13, 15, 19, 0.72); border: 1px solid #262b36;
+    padding: 10px 14px; border-radius: 8px; pointer-events: none;
+    max-width: 320px; text-shadow: 0 1px 2px #000;
+  }
+  #hud b { color: #7dd3fc; }
+  #hud a { color: #7dd3fc; pointer-events: auto; }
+  #controls {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 5;
+    display: flex; gap: 10px; align-items: center;
+    background: rgba(13, 15, 19, 0.82); border: 1px solid #262b36;
+    padding: 8px 12px; border-radius: 8px; color: #e8edf3; font-size: 12px;
+  }
+  #controls label { display: flex; align-items: center; gap: 6px; }
+  input[type="range"] { width: 110px; accent-color: #38bdf8; }
+  button {
+    background: #1e293b; color: #e8edf3; border: 1px solid #334155;
+    border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit;
+  }
+  button:hover { background: #334155; }
+  #drop {
+    position: fixed; inset: 0; z-index: 10; display: none;
+    align-items: center; justify-content: center;
+    background: rgba(13, 15, 19, 0.85); color: #7dd3fc; font-size: 20px;
+    border: 2px dashed #334155; border-radius: 12px;
+  }
+  #drop.over { display: flex; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <b>point cloud viewer</b><br />
+  Click to pick a <code>.ply</code>, or drag one in.<br />
+  Drag to orbit &middot; scroll to zoom &middot; right-drag to pan.<br />
+  <a href="#" id="auto">auto-load scan.ply</a>
+</div>
+<div id="controls">
+  <label>size <input id="size" type="range" min="0.5" max="25" step="0.5" value="7" /></label>
+  <label>near <input id="near" type="range" min="0" max="1" step="0.01" value="0.02" /></label>
+  <label>far <input id="far" type="range" min="0" max="1" step="0.01" value="0.99" /></label>
+  <button id="fit">fit</button>
+  <button id="bg">bg</button>
+  <span id="stats">0 pts</span>
+</div>
+<div id="drop">drop a .ply here</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
+
+const app = document.getElementById("app");
+const statsEl = document.getElementById("stats");
+const fileEl = document.createElement("input");
+fileEl.type = "file";
+fileEl.accept = ".ply";
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0f13);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.001, 1000);
+camera.position.set(1.6, 1.0, 1.6);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+app.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+const VERT = `
+attribute vec3 aColor;
+attribute vec3 viewZ;
+uniform float uSize;
+varying float vViewZ;
+varying vec3 vColor;
+void main() {
+  vViewZ = viewZ.z;
+  vColor = aColor;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = uSize * (240.0 / max(0.01, -mv.z));
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+const FRAG = `
+uniform float uNear;
+uniform float uFar;
+varying float vViewZ;
+varying vec3 vColor;
+void main() {
+  if (vViewZ < uNear || vViewZ > uFar) discard;
+  vec2 c = gl_PointCoord - 0.5;
+  if (dot(c, c) > 0.25) discard;
+  gl_FragColor = vec4(vColor, 1.0);
+}
+`;
+
+let points = null;
+
+function fitTo(geometry) {
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const center = box.getCenter(new THREE.Vector3());
+  const radius = box.getBoundingSphere(new THREE.Sphere()).radius;
+  controls.target.copy(center);
+  const dist = Math.max(radius, 1e-3) * 2.4;
+  camera.position.copy(center).add(new THREE.Vector3(0.7, 0.5, 0.7).normalize().multiplyScalar(dist));
+  controls.update();
+  camera.near = Math.max(dist / 20000, 1e-6);
+  camera.far = dist * 200;
+  camera.updateProjectionMatrix();
+}
+
+function applyFilters() {
+  if (!points) return;
+  points.material.uniforms.uNear.value = parseFloat(document.getElementById("near").value);
+  points.material.uniforms.uFar.value = parseFloat(document.getElementById("far").value);
+}
+
+function loadPly(blob, name) {
+  const loader = new PLYLoader();
+  blob.arrayBuffer().then((buf) => {
+    const geometry = loader.parse(buf);
+    processGeometry(geometry, name);
+  }).catch((err) => {
+    statsEl.textContent = "failed to load ply: " + err.message;
+  });
+}
+
+function processGeometry(geometry, name) {
+    if (points) { scene.remove(points); points.geometry.dispose(); points.material.dispose(); }
+
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    const lo = box.min.z, hi = box.max.z, span = Math.max(hi - lo, 1e-9);
+    const pos = geometry.attributes.position;
+    const n = pos.count;
+    const viewZ = pos.array.slice();
+    for (let i = 0; i < n; i++) viewZ[i * 3 + 2] = (pos.getZ(i) - lo) / span;
+    geometry.setAttribute("viewZ", new THREE.BufferAttribute(viewZ, 3));
+
+    // Vertex colors: PLYLoader emits a 3- or 4-component normalized `color`
+    // attribute (or none). Fold it into a stable vec3 `aColor`.
+    const hasColor = geometry.hasAttribute("color") && geometry.getAttribute("color").array.length >= n * 3;
+    const aColor = new Float32Array(n * 3);
+    if (hasColor) {
+      const src = geometry.getAttribute("color").array;
+      const comps = Math.floor(geometry.getAttribute("color").array.length / n);
+      for (let i = 0; i < n; i++) {
+        aColor[i * 3] = src[i * comps];
+        aColor[i * 3 + 1] = src[i * comps + 1];
+        aColor[i * 3 + 2] = src[i * comps + 2];
+      }
+    } else {
+      aColor.fill(1.0); // light gray fallback
+    }
+    geometry.setAttribute("aColor", new THREE.BufferAttribute(aColor, 3));
+    geometry.deleteAttribute("color");
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uSize: { value: parseFloat(document.getElementById("size").value) },
+        uNear: { value: parseFloat(document.getElementById("near").value) },
+        uFar: { value: parseFloat(document.getElementById("far").value) },
+      },
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+    });
+    points = new THREE.Points(geometry, material);
+    scene.add(points);
+    fitTo(geometry);
+    statsEl.textContent = geometry.attributes.position.count.toLocaleString() + " pts · " + (name || "");
+}
+
+function tryAutoLoad() {
+  const candidates = ["../scan.ply", "./scan.ply"];
+  let first = true;
+  const attempt = (i) => {
+    if (i >= candidates.length) return Promise.reject(new Error("no scan.ply"));
+    return fetch(candidates[i]).then((r) => {
+      if (!r.ok) throw new Error(r.status);
+      return r.blob();
+    }).then((b) => loadPly(b, candidates[i]))
+      .catch(() => (first ? attempt(i + 1) : Promise.reject(new Error("no scan.ply"))));
+  };
+  return attempt(0);
+}
+
+document.getElementById("auto").addEventListener("click", (e) => {
+  e.preventDefault();
+  tryAutoLoad().catch(() => statsEl.textContent = "no local scan.ply serving — pick a file instead");
+});
+
+document.getElementById("fit").addEventListener("click", () => points && fitTo(points.geometry));
+document.getElementById("bg").addEventListener("click", () => {
+  const dark = scene.background.getHex() === 0x0d0f13;
+  scene.background = new THREE.Color(dark ? 0xeceff4 : 0x0d0f13);
+});
+document.getElementById("size").addEventListener("input", (e) => {
+  if (points) points.material.uniforms.uSize.value = parseFloat(e.target.value);
+});
+document.getElementById("near").addEventListener("input", applyFilters);
+document.getElementById("far").addEventListener("input", applyFilters);
+
+fileEl.addEventListener("change", () => {
+  if (fileEl.files.length) loadPly(fileEl.files[0], fileEl.files[0].name);
+});
+
+window.addEventListener("click", () => { if (!fileEl.value) fileEl.click(); }, { once: true });
+
+const drop = document.getElementById("drop");
+let dragDepth = 0;
+window.addEventListener("dragenter", (e) => { e.preventDefault(); dragDepth++; drop.className = "over"; });
+window.addEventListener("dragleave", (e) => { e.preventDefault(); if (--dragDepth <= 0) drop.className = ""; });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => {
+  e.preventDefault(); dragDepth = 0; drop.className = "";
+  const file = [...e.dataTransfer.files].find((f) => f.name.toLowerCase().endsWith(".ply"));
+  if (file) loadPly(file, file.name);
+});
+
+function resize() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+window.addEventListener("resize", resize);
+
+renderer.setAnimationLoop(() => {
+  controls.update();
+  renderer.render(scene, camera);
+});
+
+tryAutoLoad().catch(() => {});
+</script>
+</body>
+</html>
