@@ -162,8 +162,74 @@ function applyFilters() {
   points.material.uniforms.uFar.value = parseFloat(document.getElementById("far").value);
 }
 
+let lastSpacing = null;
+let sizeTouched = false;
+
+function estimateSpacing(geometry) {
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const pos = geometry.attributes.position;
+  const n = pos.count;
+  const sz = box.getSize(new THREE.Vector3());
+  const vol = Math.max(sz.x * sz.y * sz.z, 1e-9);
+  const cell = Math.cbrt(vol / n);
+  const MAX_SAMPLE = 20000;
+  const stride = Math.max(1, Math.round(n / MAX_SAMPLE));
+  const inv = 1 / Math.max(cell, 1e-9);
+  const grid = new Map();
+  const MAX_PER_CELL = 8;
+  const key = (a, b, c) => a + "," + b + "," + c;
+  for (let i = 0; i < n; i += stride) {
+    const k = key(Math.floor(pos.getX(i) * inv), Math.floor(pos.getY(i) * inv), Math.floor(pos.getZ(i) * inv));
+    let bucket = grid.get(k);
+    if (!bucket) { bucket = []; grid.set(k, bucket); }
+    if (bucket.length < MAX_PER_CELL) bucket.push(i);
+  }
+  let sum = 0, count = 0;
+  for (let i = 0; i < n; i += stride) {
+    const bx = Math.floor(pos.getX(i) * inv);
+    const by = Math.floor(pos.getY(i) * inv);
+    const bz = Math.floor(pos.getZ(i) * inv);
+    const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+    let best = Infinity;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const bucket = grid.get(key(bx + dx, by + dy, bz + dz));
+          if (!bucket) continue;
+          for (let t = 0; t < bucket.length; t++) {
+            const j = bucket[t];
+            if (j === i) continue;
+            const dxv = px - pos.getX(j);
+            const dyv = py - pos.getY(j);
+            const dzv = pz - pos.getZ(j);
+            const d2 = dxv * dxv + dyv * dyv + dzv * dzv;
+            if (d2 < best) best = d2;
+          }
+        }
+      }
+    }
+    if (best < Infinity) { sum += Math.sqrt(best); count++; }
+  }
+  return count ? sum / count : cell;
+}
+
+const SIZE_OVERLAP = 1.15;
+
+function sizeFromSpacing(spacing, heightPx, dpr) {
+  const uSize = (spacing * (heightPx || innerHeight) * (dpr || devicePixelRatio || 1) * SIZE_OVERLAP) / 250;
+  return THREE.MathUtils.clamp(uSize, 0.002, 10);
+}
+
+function applyAutoSize(geometry) {
+  lastSpacing = estimateSpacing(geometry);
+  document.getElementById("size").value = String(sizeFromSpacing(lastSpacing));
+  sizeTouched = false;
+}
+
 function processGeometry(geometry, name) {
   decorateGeometry(geometry);
+  applyAutoSize(geometry);
   if (points) { scene.remove(points); points.geometry.dispose(); points.material.dispose(); }
   points = new THREE.Points(geometry, makeMaterial());
   scene.add(points);
@@ -235,7 +301,9 @@ let thumbPoints = null;
 
 function generateThumb(geometry) {
   if (thumbPoints) { thumbScene.remove(thumbPoints); thumbPoints.material.dispose(); }
-  thumbPoints = new THREE.Points(geometry, makeMaterial());
+  const material = makeMaterial();
+  material.uniforms.uSize.value = sizeFromSpacing(estimateSpacing(geometry), 128, 1);
+  thumbPoints = new THREE.Points(geometry, material);
   thumbScene.add(thumbPoints);
   frameObject(geometry, thumbCamera);
   thumbRenderer.render(thumbScene, thumbCamera);
@@ -312,6 +380,7 @@ document.getElementById("bg").addEventListener("click", () => {
   scene.background = new THREE.Color(dark ? 0xeceff4 : 0x0d0f13);
 });
 document.getElementById("size").addEventListener("input", (e) => {
+  sizeTouched = true;
   if (points) points.material.uniforms.uSize.value = parseFloat(e.target.value);
 });
 document.getElementById("near").addEventListener("input", applyFilters);
@@ -332,6 +401,10 @@ function resize() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  if (lastSpacing && !sizeTouched) {
+    document.getElementById("size").value = String(sizeFromSpacing(lastSpacing));
+    if (points) points.material.uniforms.uSize.value = parseFloat(document.getElementById("size").value);
+  }
 }
 window.addEventListener("resize", resize);
 
