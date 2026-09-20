@@ -401,6 +401,21 @@ document.getElementById("size").addEventListener("input", (e) => {
 document.getElementById("near").addEventListener("input", applyFilters);
 document.getElementById("far").addEventListener("input", applyFilters);
 
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  const el = document.activeElement;
+  if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA")) return;
+  const idx = galleryNames.indexOf(activeName);
+  if (idx < 0) return;
+  const step = e.key === "ArrowRight" ? 1 : -1;
+  const name = galleryNames[(idx + step + galleryNames.length) % galleryNames.length];
+  const card = galleryCards.get(name);
+  if (!card) return;
+  e.preventDefault();
+  selectScan(name, card.item);
+  card.item.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+});
+
 const drop = document.getElementById("drop");
 let dragDepth = 0;
 window.addEventListener("dragenter", (e) => { e.preventDefault(); dragDepth++; drop.className = "over"; });
