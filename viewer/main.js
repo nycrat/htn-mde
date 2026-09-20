@@ -357,11 +357,18 @@ async function init() {
   }
   galleryNames = names;
   galleryCards = buildGallery(names);
+  syncGalleryAnchor();
   const primary = names.includes("scan.ply") ? "scan.ply" : names[0];
   const primaryCard = galleryCards.get(primary);
   if (primaryCard) primaryCard.item.classList.add("active");
   await selectScan(primary, primaryCard ? primaryCard.item : null);
   restartThumbs();
+}
+
+function syncGalleryAnchor() {
+  const g = document.getElementById("gallery");
+  const root = document.documentElement;
+  root.style.setProperty("--gallery-h", (g ? g.offsetHeight : 0) + "px");
 }
 
 // ---- UI wiring ----
@@ -373,6 +380,16 @@ document.getElementById("bg").addEventListener("click", () => {
   const dark = scene.background.getHex() === 0x0d0f13;
   scene.background = new THREE.Color(dark ? 0xeceff4 : 0x0d0f13);
 });
+const menuBtn = document.getElementById("menu");
+if (menuBtn) {
+  const updateMenu = () => {
+    const open = document.body.classList.toggle("controls-open");
+    menuBtn.classList.toggle("open", open);
+    menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    menuBtn.innerHTML = open ? "&#10005;" : "&#9776;";
+  };
+  menuBtn.addEventListener("click", updateMenu);
+}
 document.getElementById("size").addEventListener("input", (e) => {
   sizeTouched = true;
   if (points) points.material.uniforms.uSize.value = parseFloat(e.target.value);
@@ -395,6 +412,7 @@ function resize() {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  syncGalleryAnchor();
   if (lastSpacing && !sizeTouched) {
     document.getElementById("size").value = String(sizeFromSpacing(lastSpacing));
     if (points) points.material.uniforms.uSize.value = parseFloat(document.getElementById("size").value);
