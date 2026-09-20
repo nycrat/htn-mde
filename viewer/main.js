@@ -5,7 +5,10 @@ const SCAN_DIR = "../scans/";
 
 // PLY parsing + decorating + spacing estimation all happen in a worker so the
 // render loop never blocks on load work.
-const loaderWorker = new Worker(new URL("./loader.worker.js", import.meta.url), { type: "module" });
+const loaderWorker = new Worker(
+  new URL("./loader.worker.js", import.meta.url),
+  { type: "module" },
+);
 let decodeSeq = 0;
 const decodePending = new Map();
 loaderWorker.onmessage = (e) => {
@@ -13,7 +16,10 @@ loaderWorker.onmessage = (e) => {
   const job = decodePending.get(id);
   if (!job) return;
   decodePending.delete(id);
-  if (!ok) { job.reject(new Error(e.data.error)); return; }
+  if (!ok) {
+    job.reject(new Error(e.data.error));
+    return;
+  }
   try {
     job.resolve(wrapDecoded(e.data));
   } catch (err) {
@@ -45,10 +51,18 @@ const statsEl = document.getElementById("stats");
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x121212);
 
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.001, 1000);
+const camera = new THREE.PerspectiveCamera(
+  55,
+  innerWidth / innerHeight,
+  0.001,
+  1000,
+);
 camera.position.set(1.6, 1.0, 1.6);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: "high-performance",
+});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 app.appendChild(renderer.domElement);
@@ -67,7 +81,11 @@ function updateSpinButton() {
   if (!btn) return;
   btn.classList.toggle("spin-on", spinEnabled && controls.autoRotate);
   btn.classList.toggle("spin-off", !spinEnabled);
-  btn.textContent = spinEnabled ? (controls.autoRotate ? "spin: on" : "spin: auto") : "spin: off";
+  btn.textContent = spinEnabled
+    ? controls.autoRotate
+      ? "spin: on"
+      : "spin: auto"
+    : "spin: off";
 }
 
 function stopIdleSpin() {
@@ -78,8 +96,15 @@ function stopIdleSpin() {
 
 function scheduleIdleSpin() {
   clearTimeout(idleTimer);
-  if (!spinEnabled) { controls.autoRotate = false; updateSpinButton(); return; }
-  idleTimer = setTimeout(() => { controls.autoRotate = true; updateSpinButton(); }, IDLE_MS);
+  if (!spinEnabled) {
+    controls.autoRotate = false;
+    updateSpinButton();
+    return;
+  }
+  idleTimer = setTimeout(() => {
+    controls.autoRotate = true;
+    updateSpinButton();
+  }, IDLE_MS);
 }
 
 controls.autoRotateSpeed = SPIN_SPEED;
@@ -144,7 +169,9 @@ function makeMaterial() {
 function frameObject(geometry, cam, front = false) {
   geometry.computeBoundingBox();
   const center = geometry.boundingBox.getCenter(new THREE.Vector3());
-  const radius = geometry.boundingBox.getBoundingSphere(new THREE.Sphere()).radius;
+  const radius = geometry.boundingBox.getBoundingSphere(
+    new THREE.Sphere(),
+  ).radius;
   const dist = Math.max(radius, 1e-3) * 2.4;
   cam.near = Math.max(dist / 20000, 1e-6);
   cam.far = dist * 200;
@@ -172,10 +199,15 @@ function fitTo(geometry) {
 let lastSpacing = null;
 let sizeTouched = false;
 
-const SIZE_OVERLAP = 0.60;
+const SIZE_OVERLAP = 0.6;
 
 function sizeFromSpacing(spacing, heightPx, dpr) {
-  const uSize = (spacing * (heightPx || innerHeight) * (dpr || devicePixelRatio || 1) * SIZE_OVERLAP) / 250;
+  const uSize =
+    (spacing *
+      (heightPx || innerHeight) *
+      (dpr || devicePixelRatio || 1) *
+      SIZE_OVERLAP) /
+    250;
   return THREE.MathUtils.clamp(uSize, 0.002, 10);
 }
 
@@ -187,19 +219,31 @@ function applyAutoSize(geometry) {
 
 function processGeometry(geometry, name) {
   applyAutoSize(geometry);
-  if (points) { scene.remove(points); points.geometry.dispose(); points.material.dispose(); }
+  if (points) {
+    scene.remove(points);
+    points.geometry.dispose();
+    points.material.dispose();
+  }
   points = new THREE.Points(geometry, makeMaterial());
   scene.add(points);
   fitTo(geometry);
   scheduleIdleSpin();
-  statsEl.textContent = geometry.attributes.position.count.toLocaleString() + " pts · " + (name || "");
+  statsEl.textContent =
+    geometry.attributes.position.count.toLocaleString() +
+    " pts · " +
+    (name || "");
 }
 
 function loadPly(blob, name) {
   blob.arrayBuffer().then((buf) => {
     return decodeOnWorker(buf)
-      .then((geometry) => { geometry.userData.name = name; processGeometry(geometry, name); })
-      .catch((err) => { statsEl.textContent = "failed to load ply: " + err.message; });
+      .then((geometry) => {
+        geometry.userData.name = name;
+        processGeometry(geometry, name);
+      })
+      .catch((err) => {
+        statsEl.textContent = "failed to load ply: " + err.message;
+      });
   });
 }
 
@@ -217,9 +261,16 @@ function loadScanGeometry(name) {
   if (scanCache.has(name)) return Promise.resolve(scanCache.get(name));
   if (inflight.has(name)) return inflight.get(name);
   const p = fetch(scanUrl(name))
-    .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then((r) => {
+      if (!r.ok) throw new Error(r.status);
+      return r.arrayBuffer();
+    })
     .then((buf) => decodeOnWorker(buf))
-    .then((geometry) => { geometry.name = name; scanCache.set(name, geometry); return geometry; })
+    .then((geometry) => {
+      geometry.name = name;
+      scanCache.set(name, geometry);
+      return geometry;
+    })
     .finally(() => inflight.delete(name));
   inflight.set(name, p);
   return p;
@@ -263,9 +314,17 @@ function thumbGeometry(data) {
 
 function generateThumb(geometry) {
   if (!geometry.userData.thumb) return "";
-  if (thumbPoints) { thumbScene.remove(thumbPoints); thumbPoints.geometry.dispose(); thumbPoints.material.dispose(); }
+  if (thumbPoints) {
+    thumbScene.remove(thumbPoints);
+    thumbPoints.geometry.dispose();
+    thumbPoints.material.dispose();
+  }
   const material = makeMaterial();
-  material.uniforms.uSize.value = sizeFromSpacing(geometry.userData.spacing, 128, 1);
+  material.uniforms.uSize.value = sizeFromSpacing(
+    geometry.userData.spacing,
+    128,
+    1,
+  );
   const tg = thumbGeometry(geometry.userData.thumb);
   thumbPoints = new THREE.Points(tg, material);
   thumbScene.add(thumbPoints);
@@ -305,7 +364,9 @@ function selectScan(name, item) {
   return loadScanGeometry(name)
     .then((geometry) => processGeometry(geometry, name))
     .then(() => restartThumbs())
-    .catch((err) => { statsEl.textContent = "failed to load " + name + ": " + err.message; });
+    .catch((err) => {
+      statsEl.textContent = "failed to load " + name + ": " + err.message;
+    });
 }
 
 async function runThumbLoop(names, cards) {
@@ -346,7 +407,9 @@ function restartThumbs() {
   if (pending.length) runThumbLoop(pending, galleryCards);
 }
 
-document.addEventListener("visibilitychange", () => { if (!document.hidden) restartThumbs(); });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) restartThumbs();
+});
 
 let galleryNames = [];
 let galleryCards = new Map();
@@ -393,26 +456,48 @@ document.getElementById("size").addEventListener("input", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
   const el = document.activeElement;
-  if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA")) return;
+  if (
+    el &&
+    (el.tagName === "INPUT" ||
+      el.tagName === "SELECT" ||
+      el.tagName === "TEXTAREA")
+  )
+    return;
   const idx = galleryNames.indexOf(activeName);
   if (idx < 0) return;
   const step = e.key === "ArrowRight" ? 1 : -1;
-  const name = galleryNames[(idx + step + galleryNames.length) % galleryNames.length];
+  const name =
+    galleryNames[(idx + step + galleryNames.length) % galleryNames.length];
   const card = galleryCards.get(name);
   if (!card) return;
   e.preventDefault();
   selectScan(name, card.item);
-  card.item.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  card.item.scrollIntoView({
+    behavior: "smooth",
+    block: "nearest",
+    inline: "center",
+  });
 });
 
 const drop = document.getElementById("drop");
 let dragDepth = 0;
-window.addEventListener("dragenter", (e) => { e.preventDefault(); dragDepth++; drop.className = "over"; });
-window.addEventListener("dragleave", (e) => { e.preventDefault(); if (--dragDepth <= 0) drop.className = ""; });
+window.addEventListener("dragenter", (e) => {
+  e.preventDefault();
+  dragDepth++;
+  drop.className = "over";
+});
+window.addEventListener("dragleave", (e) => {
+  e.preventDefault();
+  if (--dragDepth <= 0) drop.className = "";
+});
 window.addEventListener("dragover", (e) => e.preventDefault());
 window.addEventListener("drop", (e) => {
-  e.preventDefault(); dragDepth = 0; drop.className = "";
-  const file = [...e.dataTransfer.files].find((f) => f.name.toLowerCase().endsWith(".ply"));
+  e.preventDefault();
+  dragDepth = 0;
+  drop.className = "";
+  const file = [...e.dataTransfer.files].find((f) =>
+    f.name.toLowerCase().endsWith(".ply"),
+  );
   if (file) loadPly(file, file.name);
 });
 
@@ -422,8 +507,13 @@ function resize() {
   renderer.setSize(innerWidth, innerHeight);
   syncGalleryAnchor();
   if (lastSpacing && !sizeTouched) {
-    document.getElementById("size").value = String(sizeFromSpacing(lastSpacing));
-    if (points) points.material.uniforms.uSize.value = parseFloat(document.getElementById("size").value);
+    document.getElementById("size").value = String(
+      sizeFromSpacing(lastSpacing),
+    );
+    if (points)
+      points.material.uniforms.uSize.value = parseFloat(
+        document.getElementById("size").value,
+      );
   }
 }
 window.addEventListener("resize", resize);

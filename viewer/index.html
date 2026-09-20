@@ -1,31 +1,51 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>webcam-depth &middot; point cloud viewer</title>
-<link rel="stylesheet" href="style.css" />
-</head>
-<body>
-<div id="app"></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>webcam-depth &middot; point cloud viewer</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
 
-<div id="controls">
-  <label>size <input id="size" type="range" min="0.001" max="1" step="0.005" value="0.05" /></label>
-  <span id="stats">0 pts</span>
-</div>
-<div id="drop">drop a .ply here</div>
-<button id="spin" type="button">spin: auto</button>
-<button id="menu" type="button" aria-label="Toggle controls" aria-expanded="false" aria-controls="controls">&#9776;</button>
-<div id="gallery"><div id="gallery-strip"></div></div>
+    <div id="controls">
+      <label
+        >size
+        <input
+          id="size"
+          type="range"
+          min="0.001"
+          max="1"
+          step="0.005"
+          value="0.05"
+      /></label>
+      <span id="stats">0 pts</span>
+    </div>
+    <div id="drop">drop a .ply here</div>
+    <button id="spin" type="button">spin: auto</button>
+    <button
+      id="menu"
+      type="button"
+      aria-label="Toggle controls"
+      aria-expanded="false"
+      aria-controls="controls"
+    >
+      &#9776;
+    </button>
+    <div id="gallery"><div id="gallery-strip"></div></div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-  }
-}
-</script>
-<script type="module" src="main.js"></script>
-</body>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="main.js"></script>
+  </body>
 </html>

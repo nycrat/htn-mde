@@ -20,7 +20,11 @@ globalThis.onmessage = (e) => {
       result.thumb.color.buffer,
     ]);
   } catch (err) {
-    globalThis.postMessage({ id, ok: false, error: String(err.message || err) });
+    globalThis.postMessage({
+      id,
+      ok: false,
+      error: String(err.message || err),
+    });
   }
 };
 
@@ -31,21 +35,41 @@ for (let i = 0; i < 256; i++) {
 }
 
 const TYPE_BYTES = {
-  int8: 1, char: 1, uint8: 1, uchar: 1,
-  int16: 2, short: 2, uint16: 2, ushort: 2,
-  int32: 4, int: 4, uint32: 4, uint: 4,
-  float32: 4, float: 4, float64: 8, double: 8,
+  int8: 1,
+  char: 1,
+  uint8: 1,
+  uchar: 1,
+  int16: 2,
+  short: 2,
+  uint16: 2,
+  ushort: 2,
+  int32: 4,
+  int: 4,
+  uint32: 4,
+  uint: 4,
+  float32: 4,
+  float: 4,
+  float64: 8,
+  double: 8,
 };
 
 const TYPE_GETTER = {
-  int8: "getInt8", char: "getInt8",
-  uint8: "getUint8", uchar: "getUint8",
-  int16: "getInt16", short: "getInt16",
-  uint16: "getUint16", ushort: "getUint16",
-  int32: "getInt32", int: "getInt32",
-  uint32: "getUint32", uint: "getUint32",
-  float32: "getFloat32", float: "getFloat32",
-  float64: "getFloat64", double: "getFloat64",
+  int8: "getInt8",
+  char: "getInt8",
+  uint8: "getUint8",
+  uchar: "getUint8",
+  int16: "getInt16",
+  short: "getInt16",
+  uint16: "getUint16",
+  ushort: "getUint16",
+  int32: "getInt32",
+  int: "getInt32",
+  uint32: "getUint32",
+  uint: "getUint32",
+  float32: "getFloat32",
+  float: "getFloat32",
+  float64: "getFloat64",
+  double: "getFloat64",
 };
 
 function decode(buf) {
@@ -58,7 +82,10 @@ function decode(buf) {
     const word = "end_header";
     if (i + word.length - 1 >= bytes.length) break;
     for (let j = 0; j < word.length; j++) {
-      if (String.fromCharCode(bytes[i + j]) !== word[j]) { match = false; break; }
+      if (String.fromCharCode(bytes[i + j]) !== word[j]) {
+        match = false;
+        break;
+      }
     }
     if (match) {
       // advance past "end_header\n"
@@ -70,7 +97,9 @@ function decode(buf) {
   }
   if (headerEnd < 0) throw new Error("no end_header found");
 
-  const headerText = new TextDecoder("latin1").decode(bytes.subarray(0, headerEnd));
+  const headerText = new TextDecoder("latin1").decode(
+    bytes.subarray(0, headerEnd),
+  );
   const formatLine = headerText.match(/^format\s+(\S+)/m);
   if (!formatLine) throw new Error("no format line");
   const littleEndian = formatLine[1] === "binary_little_endian";
@@ -121,19 +150,46 @@ function decode(buf) {
   if (iR >= 0 && iG >= 0 && iB >= 0) {
     for (let r = 0; r < n; r++) {
       const base = headerEnd + r * rowSize;
-      position[r * 3] = read(base + offsets[iX], TYPE_GETTER[props[iX].type], littleEndian);
-      position[r * 3 + 1] = read(base + offsets[iY], TYPE_GETTER[props[iY].type], littleEndian);
-      position[r * 3 + 2] = read(base + offsets[iZ], TYPE_GETTER[props[iZ].type], littleEndian);
-      aColor[r * 3] = SRGB_LUT[read(base + offsets[iR], "getUint8", false) & 0xff];
-      aColor[r * 3 + 1] = SRGB_LUT[read(base + offsets[iG], "getUint8", false) & 0xff];
-      aColor[r * 3 + 2] = SRGB_LUT[read(base + offsets[iB], "getUint8", false) & 0xff];
+      position[r * 3] = read(
+        base + offsets[iX],
+        TYPE_GETTER[props[iX].type],
+        littleEndian,
+      );
+      position[r * 3 + 1] = read(
+        base + offsets[iY],
+        TYPE_GETTER[props[iY].type],
+        littleEndian,
+      );
+      position[r * 3 + 2] = read(
+        base + offsets[iZ],
+        TYPE_GETTER[props[iZ].type],
+        littleEndian,
+      );
+      aColor[r * 3] =
+        SRGB_LUT[read(base + offsets[iR], "getUint8", false) & 0xff];
+      aColor[r * 3 + 1] =
+        SRGB_LUT[read(base + offsets[iG], "getUint8", false) & 0xff];
+      aColor[r * 3 + 2] =
+        SRGB_LUT[read(base + offsets[iB], "getUint8", false) & 0xff];
     }
   } else {
     for (let r = 0; r < n; r++) {
       const base = headerEnd + r * rowSize;
-      position[r * 3] = read(base + offsets[iX], TYPE_GETTER[props[iX].type], littleEndian);
-      position[r * 3 + 1] = read(base + offsets[iY], TYPE_GETTER[props[iY].type], littleEndian);
-      position[r * 3 + 2] = read(base + offsets[iZ], TYPE_GETTER[props[iZ].type], littleEndian);
+      position[r * 3] = read(
+        base + offsets[iX],
+        TYPE_GETTER[props[iX].type],
+        littleEndian,
+      );
+      position[r * 3 + 1] = read(
+        base + offsets[iY],
+        TYPE_GETTER[props[iY].type],
+        littleEndian,
+      );
+      position[r * 3 + 2] = read(
+        base + offsets[iZ],
+        TYPE_GETTER[props[iZ].type],
+        littleEndian,
+      );
       aColor[r * 3] = 1;
       aColor[r * 3 + 1] = 1;
       aColor[r * 3 + 2] = 1;
@@ -152,7 +208,8 @@ function decode(buf) {
 
 function computeViewZ(position) {
   const n = position.length / 3;
-  let lo = Infinity, hi = -Infinity;
+  let lo = Infinity,
+    hi = -Infinity;
   const viewZ = new Float32Array(position.length);
   for (let i = 0; i < n; i++) {
     const z = position[i * 3 + 2];
@@ -173,40 +230,62 @@ function computeViewZ(position) {
 function estimateSpacing(position) {
   const n = position.length / 3;
   if (n < 2) return 1;
-  let minX = Infinity, minY = Infinity, minZ = Infinity;
-  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  let minX = Infinity,
+    minY = Infinity,
+    minZ = Infinity;
+  let maxX = -Infinity,
+    maxY = -Infinity,
+    maxZ = -Infinity;
   for (let i = 0; i < n; i++) {
-    const x = position[i * 3], y = position[i * 3 + 1], z = position[i * 3 + 2];
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    const x = position[i * 3],
+      y = position[i * 3 + 1],
+      z = position[i * 3 + 2];
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
   }
-  const cell = Math.cbrt(Math.max((maxX - minX) * (maxY - minY) * (maxZ - minZ), 1e-9) / n);
+  const cell = Math.cbrt(
+    Math.max((maxX - minX) * (maxY - minY) * (maxZ - minZ), 1e-9) / n,
+  );
   const inv = 1 / Math.max(cell, 1e-9);
   const MAX_SAMPLE = 20000;
   const stride = Math.max(1, Math.round(n / MAX_SAMPLE));
   const MAX_PER_CELL = 8;
   const grid = new Map();
-  const key = (a, b, c) => ((a * 73856093) ^ (b * 19349663) ^ (c * 83492791)) >>> 0;
+  const key = (a, b, c) =>
+    ((a * 73856093) ^ (b * 19349663) ^ (c * 83492791)) >>> 0;
 
   const sampledIdx = [];
-  const bx = [], by = [], bz = [];
+  const bx = [],
+    by = [],
+    bz = [];
   for (let i = 0; i < n; i += stride) {
     const gx = Math.floor(position[i * 3] * inv);
     const gy = Math.floor(position[i * 3 + 1] * inv);
     const gz = Math.floor(position[i * 3 + 2] * inv);
     const k = key(gx, gy, gz);
     let bucket = grid.get(k);
-    if (!bucket) { bucket = []; grid.set(k, bucket); }
+    if (!bucket) {
+      bucket = [];
+      grid.set(k, bucket);
+    }
     if (bucket.length < MAX_PER_CELL) bucket.push(i);
     sampledIdx.push(i);
-    bx.push(gx); by.push(gy); bz.push(gz);
+    bx.push(gx);
+    by.push(gy);
+    bz.push(gz);
   }
 
-  let sum = 0, count = 0;
+  let sum = 0,
+    count = 0;
   for (let s = 0; s < sampledIdx.length; s++) {
     const i = sampledIdx[s];
-    const px = position[i * 3], py = position[i * 3 + 1], pz = position[i * 3 + 2];
+    const px = position[i * 3],
+      py = position[i * 3 + 1],
+      pz = position[i * 3 + 2];
     let best = Infinity;
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
@@ -225,7 +304,10 @@ function estimateSpacing(position) {
         }
       }
     }
-    if (best < Infinity) { sum += Math.sqrt(best); count++; }
+    if (best < Infinity) {
+      sum += Math.sqrt(best);
+      count++;
+    }
   }
   return count ? sum / count : cell;
 }
@@ -248,7 +330,8 @@ function sampleThumb(position, aColor) {
     col[o * 3 + 1] = aColor[i * 3 + 1];
     col[o * 3 + 2] = aColor[i * 3 + 2];
   }
-  let lo = Infinity, hi = -Infinity;
+  let lo = Infinity,
+    hi = -Infinity;
   for (let o = 0; o < out; o++) {
     const z = vz[o * 3 + 2];
     if (z < lo) lo = z;

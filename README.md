@@ -41,10 +41,10 @@ session's `images/` folder, and run `--sfm` on the session.
 
 ## Model options
 
-| `--encoder` | Params | Notes |
-|-------------|--------|-------|
-| `vits`      | ~24.8M | ~15-30 FPS, smooth fallback |
-| `vitb`      | ~97M   | default, best quality/speed |
+| `--encoder` | Params | Notes                           |
+| ----------- | ------ | ------------------------------- |
+| `vits`      | ~24.8M | ~15-30 FPS, smooth fallback     |
+| `vitb`      | ~97M   | default, best quality/speed     |
 | `vitl`      | ~335M  | max quality, use on M2 Pro/Max+ |
 
 Inference uses the Metal Performance Shaders backend (`mps`) when available.
