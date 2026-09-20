@@ -1,0 +1,56 @@
+name: Deploy viewer to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build site artifact
+        run: |
+          set -euo pipefail
+          mkdir -p dist/viewer dist/scans
+
+          # Frontend: viewer/ is the site; scans/ is its data sibling.
+          cp -r viewer/. dist/viewer/
+          cp scans/*.ply dist/scans/
+
+          # GitHub Pages serves no directory listing, so generate the manifest
+          # discoverScans() fetches at ../scans/ (parses href="X.ply").
+          python3 - <<'PY'
+          import html
+          from pathlib import Path
+          scans = sorted(p.name for p in Path("dist/scans").iterdir() if p.suffix.lower() == ".ply")
+          body = "".join(f'<a href="{html.escape(name, quote=True)}">{html.escape(name)}</a>\n' for name in scans)
+          Path("dist/scans/index.html").write_text(f"<!doctype html><meta charset=\"utf-8\">\n{body}", encoding="utf-8")
+          print(f"manifest: {len(scans)} scans")
+          PY
+
+          # Site root just bounces into the viewer.
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=viewer/">' > dist/index.html
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy
+        uses: actions/deploy-pages@v4
