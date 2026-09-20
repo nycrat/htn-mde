@@ -1,4 +1,10 @@
-# webcam-depth
+<img width="2036" height="1271" alt="image" src="https://github.com/user-attachments/assets/5cf5cba4-6aad-4d77-80a6-e777b5ea0a27" />
+
+# MDE Gallery
+
+Three.js WebGL viewer for 3D scan. Visit the website [here](https://nycrat.dev/htn-mde/viewer/).
+
+# MDE CLI
 
 Real-time monocular depth estimation from a webcam, optimized for Apple Silicon (MPS).
 Built on [Depth Anything V2](https://github.com/depthanything/Depth-Anything-V2), loaded
