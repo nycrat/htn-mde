@@ -141,14 +141,22 @@ function makeMaterial() {
   });
 }
 
-function frameObject(geometry, cam) {
+function frameObject(geometry, cam, front = false) {
   geometry.computeBoundingBox();
   const center = geometry.boundingBox.getCenter(new THREE.Vector3());
   const radius = geometry.boundingBox.getBoundingSphere(new THREE.Sphere()).radius;
   const dist = Math.max(radius, 1e-3) * 2.4;
   cam.near = Math.max(dist / 20000, 1e-6);
   cam.far = dist * 200;
-  cam.position.copy(center).add(new THREE.Vector3(0.7, 0.5, 0.7).normalize().multiplyScalar(dist));
+  // Scans are stored with the capture camera at the origin looking down +Z
+  // (depth); the subject's rendered front faces +Z, so the original image's
+  // perspective is viewed from +Z looking back toward -Z, yawed -20deg so the
+  // initial framing is on the same side as auto-rotation.
+  const yaw = (20 * Math.PI) / 180;
+  const dir = front
+    ? new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
+    : new THREE.Vector3(0.7, 0.5, 0.7).normalize();
+  cam.position.copy(center).add(dir.multiplyScalar(dist));
   cam.lookAt(center);
   cam.updateProjectionMatrix();
 }
@@ -157,7 +165,7 @@ function fitTo(geometry) {
   geometry.computeBoundingBox();
   const center = geometry.boundingBox.getCenter(new THREE.Vector3());
   controls.target.copy(center);
-  frameObject(geometry, camera);
+  frameObject(geometry, camera, true);
   controls.update();
 }
 
