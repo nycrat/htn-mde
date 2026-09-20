@@ -1,41 +1,41 @@
 :root { color-scheme: dark; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0f13; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #121212; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 #app { position: fixed; inset: 0; touch-action: none; }
 #controls {
   position: fixed; bottom: 122px; left: 50%; transform: translateX(-50%); z-index: 5;
   display: flex; gap: 10px; align-items: center;
-  background: rgba(13, 15, 19, 0.82); border: 1px solid #262b36;
-  padding: 8px 12px; border-radius: 8px; color: #e8edf3; font-size: 12px;
+  background: rgba(18, 18, 18, 0.82); border: 1px solid #3a3a3a;
+  padding: 8px 12px; border-radius: 8px; color: #e8e8e8; font-size: 12px;
 }
 #controls label { display: flex; align-items: center; gap: 6px; }
-input[type="range"] { width: 110px; accent-color: #38bdf8; }
+input[type="range"] { width: 110px; accent-color: #d6d6d6; }
 button {
-  background: #1e293b; color: #e8edf3; border: 1px solid #334155;
+  background: #3a3a3a; color: #e8e8e8; border: 1px solid #3a3a3a;
   border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit;
   touch-action: manipulation;
 }
-button:hover { background: #334155; }
-button:active { background: #475569; }
-.gallery-item:active { background: #243149; }
+button:hover { filter: brightness(1.2); }
+button:active { filter: brightness(1.4); }
+.gallery-item:active { filter: brightness(1.3); }
 #spin {
   position: fixed; top: 14px; right: 14px; z-index: 5;
-  background: rgba(13, 15, 19, 0.82); border-color: #262b36;
+  background: rgba(18, 18, 18, 0.82); border-color: #3a3a3a;
   font-size: 12px;
 }
-#spin:hover { background: #1e293b; }
-#spin.spin-on { border-color: #38bdf8; color: #7dd3fc; box-shadow: 0 0 0 1px #38bdf8, 0 0 12px rgba(56, 189, 248, 0.35); }
+#spin:hover { filter: brightness(1.2); }
+#spin.spin-on { border-color: #d6d6d6; color: #d6d6d6; }
 #spin.spin-off { opacity: 0.6; }
 #menu { display: none; }
 #drop {
   position: fixed; inset: 0; z-index: 10; display: none;
   align-items: center; justify-content: center;
-  background: rgba(13, 15, 19, 0.85); color: #7dd3fc; font-size: 20px;
-  border: 2px dashed #334155; border-radius: 12px;
+  background: rgba(18, 18, 18, 0.85); color: #d6d6d6; font-size: 20px;
+  border: 2px dashed #3a3a3a; border-radius: 12px;
 }
 #drop.over { display: flex; }
 #gallery {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 4;
-  background: rgba(13, 15, 19, 0.85); border-top: 1px solid #262b36;
+  background: rgba(18, 18, 18, 0.85); border-top: 1px solid #3a3a3a;
   overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
   -webkit-overflow-scrolling: touch; touch-action: pan-x;
 }
@@ -45,15 +45,15 @@ body.no-gallery #gallery { display: none; }
 body.no-gallery #controls { bottom: 14px; }
 .gallery-item {
   flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; align-items: center;
-  background: transparent; border: 1px solid #334155; border-radius: 8px;
-  padding: 5px 6px 6px; cursor: pointer; color: #e8edf3;
+  background: transparent; border: 1px solid #3a3a3a; border-radius: 8px;
+  padding: 5px 6px 6px; cursor: pointer; color: #e8e8e8;
   touch-action: manipulation;
 }
-.gallery-item:hover { background: #1e293b; }
-.gallery-item.active { border-color: #38bdf8; box-shadow: 0 0 0 1px #38bdf8, 0 0 12px rgba(56, 189, 248, 0.35); }
+.gallery-item:hover { filter: brightness(1.15); }
+.gallery-item.active { border-color: #d6d6d6; }
 .gallery-item img.thumb {
   width: 64px; height: 64px; border-radius: 4px; object-fit: cover;
-  background: #1e293b; display: block;
+  background: #3a3a3a; display: block;
 }
 .gallery-item span {
   font-size: 9px; max-width: 72px; text-align: center;
@@ -73,9 +73,9 @@ body.no-gallery #controls { bottom: 14px; }
     z-index: 7; width: 22px; height: 44px; padding: 0;
     background: transparent; border-color: transparent;
     border-radius: 8px 0 0 8px;
-    font-size: 14px; color: #94a3b8;
+    font-size: 14px; color: #909090;
   }
-  #menu.open { background: transparent; color: #38bdf8; }
+  #menu.open { background: transparent; color: #d6d6d6; }
   #controls {
     left: 0; right: 0;
     bottom: var(--gallery-h, 96px);

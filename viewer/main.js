@@ -43,7 +43,7 @@ const app = document.getElementById("app");
 const statsEl = document.getElementById("stats");
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0d0f13);
+scene.background = new THREE.Color(0x121212);
 
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.001, 1000);
 camera.position.set(1.6, 1.0, 1.6);
@@ -377,8 +377,8 @@ document.getElementById("fit").addEventListener("click", () => {
   if (points) { fitTo(points.geometry); scheduleIdleSpin(); }
 });
 document.getElementById("bg").addEventListener("click", () => {
-  const dark = scene.background.getHex() === 0x0d0f13;
-  scene.background = new THREE.Color(dark ? 0xeceff4 : 0x0d0f13);
+  const dark = scene.background.getHex() === 0x121212;
+  scene.background = new THREE.Color(dark ? 0xeceff4 : 0x121212);
 });
 const menuBtn = document.getElementById("menu");
 if (menuBtn) {
