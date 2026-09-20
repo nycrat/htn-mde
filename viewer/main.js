@@ -22,6 +22,47 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 
+const IDLE_MS = 500;
+const SPIN_SPEED = 0.7;
+let idleTimer = null;
+let spinEnabled = true;
+
+function updateSpinButton() {
+  const btn = document.getElementById("spin");
+  if (!btn) return;
+  btn.classList.toggle("spin-on", spinEnabled && controls.autoRotate);
+  btn.classList.toggle("spin-off", !spinEnabled);
+  btn.textContent = spinEnabled ? (controls.autoRotate ? "spin: on" : "spin: auto") : "spin: off";
+}
+
+function stopIdleSpin() {
+  clearTimeout(idleTimer);
+  controls.autoRotate = false;
+  updateSpinButton();
+}
+
+function scheduleIdleSpin() {
+  clearTimeout(idleTimer);
+  if (!spinEnabled) { controls.autoRotate = false; updateSpinButton(); return; }
+  idleTimer = setTimeout(() => { controls.autoRotate = true; updateSpinButton(); }, IDLE_MS);
+}
+
+controls.autoRotateSpeed = SPIN_SPEED;
+controls.addEventListener("start", stopIdleSpin);
+controls.addEventListener("end", scheduleIdleSpin);
+scheduleIdleSpin();
+
+document.getElementById("spin").addEventListener("click", () => {
+  spinEnabled = !spinEnabled;
+  clearTimeout(idleTimer);
+  if (spinEnabled) {
+    controls.autoRotate = true;
+  } else {
+    controls.autoRotate = false;
+  }
+  updateSpinButton();
+});
+
 const VERT = `
 attribute vec3 aColor;
 attribute vec3 viewZ;
@@ -127,6 +168,7 @@ function processGeometry(geometry, name) {
   points = new THREE.Points(geometry, makeMaterial());
   scene.add(points);
   fitTo(geometry);
+  scheduleIdleSpin();
   statsEl.textContent = geometry.attributes.position.count.toLocaleString() + " pts · " + (name || "");
 }
 
@@ -262,7 +304,9 @@ async function init() {
 
 // ---- UI wiring ----
 
-document.getElementById("fit").addEventListener("click", () => points && fitTo(points.geometry));
+document.getElementById("fit").addEventListener("click", () => {
+  if (points) { fitTo(points.geometry); scheduleIdleSpin(); }
+});
 document.getElementById("bg").addEventListener("click", () => {
   const dark = scene.background.getHex() === 0x0d0f13;
   scene.background = new THREE.Color(dark ? 0xeceff4 : 0x0d0f13);

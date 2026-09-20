@@ -22,6 +22,14 @@ button {
   border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit;
 }
 button:hover { background: #334155; }
+#spin {
+  position: fixed; top: 14px; right: 14px; z-index: 5;
+  background: rgba(13, 15, 19, 0.82); border-color: #262b36;
+  font-size: 12px;
+}
+#spin:hover { background: #1e293b; }
+#spin.spin-on { border-color: #38bdf8; color: #7dd3fc; box-shadow: 0 0 0 1px #38bdf8, 0 0 12px rgba(56, 189, 248, 0.35); }
+#spin.spin-off { opacity: 0.6; }
 #drop {
   position: fixed; inset: 0; z-index: 10; display: none;
   align-items: center; justify-content: center;
