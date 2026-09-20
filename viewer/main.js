@@ -178,7 +178,7 @@ function applyFilters() {
 let lastSpacing = null;
 let sizeTouched = false;
 
-const SIZE_OVERLAP = 1.15;
+const SIZE_OVERLAP = 0.60;
 
 function sizeFromSpacing(spacing, heightPx, dpr) {
   const uSize = (spacing * (heightPx || innerHeight) * (dpr || devicePixelRatio || 1) * SIZE_OVERLAP) / 250;
