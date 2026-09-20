@@ -71,7 +71,9 @@ Emit a colored `.ply` point cloud from mono depth, then view it in the Three.js 
 ```
 
 Tuning: `--fov 60` (camera horizontal FOV), `--stride 1` (full detail), `--keep 0.01 0.99`
-(depth quantile range), `--encoder vits` (faster capture).
+(depth quantile range), `--encoder vits` (faster capture). Scans are voxel-downsampled
+by default (`--voxel 0` = auto, ~diag/1000) to keep the point cloud light in the viewer;
+pass a larger `--voxel` for an even smaller cloud.
 
 View it. Serve the viewer from the repo root, then open the scans gallery:
 

@@ -13,8 +13,8 @@ scene.background = new THREE.Color(0x0d0f13);
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.001, 1000);
 camera.position.set(1.6, 1.0, 1.6);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(devicePixelRatio);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 app.appendChild(renderer.domElement);
 
@@ -73,7 +73,7 @@ void main() {
   vViewZ = viewZ.z;
   vColor = aColor;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
-  gl_PointSize = uSize * (240.0 / max(0.01, -mv.z));
+  gl_PointSize = min(uSize * (240.0 / max(0.01, -mv.z)), 256.0);
   gl_Position = projectionMatrix * mv;
 }
 `;

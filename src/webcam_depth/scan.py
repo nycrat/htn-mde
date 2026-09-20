@@ -11,7 +11,7 @@ import numpy as np
 
 from .pipeline import depth_to_bgr, normalize_depth
 from .predictor import DepthPredictor
-from .sfm import capture_session, fuse_session, run_colmap
+from .sfm import capture_session, fuse_session, run_colmap, voxel_downsample
 
 
 @dataclass(frozen=True)
@@ -136,6 +136,28 @@ def write_ply(path: str | Path, pts: np.ndarray, rgb: np.ndarray) -> Path:
     return path
 
 
+def downsample_cloud(
+    pts: np.ndarray,
+    rgb: np.ndarray,
+    voxel: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Voxel-downsample a cloud to keep the viewer light and snappy.
+
+    `voxel` is the grid cell size in model units; `<=0` picks ~diag/1000
+    (keeps point spacing proportional to object size, which the viewer
+    renders at that spacing).
+    """
+    if len(pts) == 0:
+        return pts, rgb
+    if voxel <= 0.0:
+        diag = float(np.linalg.norm(pts.max(axis=0) - pts.min(axis=0)))
+        voxel = diag / 1000.0
+        print(f"[voxel] auto size = {voxel:.3e}")
+    pts, rgb = voxel_downsample(pts, rgb, voxel)
+    print(f"[voxel] {len(pts):,} points")
+    return pts, rgb
+
+
 def _rotate_y(pts: np.ndarray, angle_rad: float) -> np.ndarray:
     c, s = np.cos(angle_rad), np.sin(angle_rad)
     r = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]], dtype=np.float32)
@@ -152,6 +174,7 @@ def capture_spin_sweep(
     keep: tuple[float, float],
     interval: float,
     preview: bool,
+    voxel: float,
     out_path: str | Path,
 ) -> Path:
     """Capture a ~360-degree sweep under the turntable assumption.
@@ -210,6 +233,7 @@ def capture_spin_sweep(
     pts = np.concatenate(parts_pts)
     rgb = np.concatenate(parts_rgb)
     print(f"[sweep] fused {captured} frames, {len(pts):,} points")
+    pts, rgb = downsample_cloud(pts, rgb, voxel)
     return write_ply(out_path, pts, rgb)
 
 
@@ -220,6 +244,7 @@ def run_interactive_single(
     intrinsics: CameraIntrinsics,
     stride: int,
     keep: tuple[float, float],
+    voxel: float,
     out_path: str | Path,
 ) -> Path:
     """Live preview; press 'c' to capture the current frame as a scan."""
@@ -253,6 +278,7 @@ def run_interactive_single(
                 break
             if key in (ord("c"), ord("s")):
                 pts, rgb = unproject(frame, depth, intrinsics, stride=stride, keep=keep)
+                pts, rgb = downsample_cloud(pts, rgb, voxel)
                 last_saved = str(write_ply(out_path, pts, rgb))
                 print(f"[saved] {last_saved} ({len(pts):,} points)")
     finally:
@@ -271,6 +297,7 @@ def scan_image(
     intrinsics: CameraIntrinsics,
     stride: int,
     keep: tuple[float, float],
+    voxel: float,
     out_path: str | Path,
 ) -> Path:
     """One-shot scan of a single image."""
@@ -280,6 +307,7 @@ def scan_image(
     depth = predictor.infer(frame)
     pts, rgb = unproject(frame, depth, intrinsics, stride=stride, keep=keep)
     print(f"[scan] {len(pts):,} points")
+    pts, rgb = downsample_cloud(pts, rgb, voxel)
     return write_ply(out_path, pts, rgb)
 
 
@@ -314,7 +342,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--voxel",
         type=float,
         default=0.0,
-        help="voxel downsample size in model units (<=0: auto, default 0)",
+        help="voxel downsample size in model units, all capture modes (<=0: auto, ~diag/1000, default 0)",
     )
     p.add_argument("--sweep", type=int, default=0, metavar="N", help="capture N frames in a ~360deg sweep")
     p.add_argument("--source", type=int, default=0, help="webcam device index (default 0)")
@@ -424,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
                 intrinsics=intrinsics,
                 stride=args.stride,
                 keep=tuple(args.keep),
+                voxel=args.voxel,
                 out_path=args.out,
             )
         elif args.sweep > 0:
@@ -443,6 +472,7 @@ def main(argv: list[str] | None = None) -> int:
                 keep=tuple(args.keep),
                 interval=args.interval,
                 preview=not args.no_preview,
+                voxel=args.voxel,
                 out_path=args.out,
             )
         else:
@@ -459,6 +489,7 @@ def main(argv: list[str] | None = None) -> int:
                 intrinsics=intrinsics,
                 stride=args.stride,
                 keep=tuple(args.keep),
+                voxel=args.voxel,
                 out_path=args.out,
             )
         print(f"[done] view it: .venv/bin/python -m http.server 8000  # then open http://localhost:8000/viewer/ and load {args.out}")
