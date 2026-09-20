@@ -85,7 +85,8 @@ function scheduleIdleSpin() {
 controls.autoRotateSpeed = SPIN_SPEED;
 controls.addEventListener("start", stopIdleSpin);
 controls.addEventListener("end", scheduleIdleSpin);
-scheduleIdleSpin();
+controls.autoRotate = true;
+updateSpinButton();
 
 document.getElementById("spin").addEventListener("click", () => {
   spinEnabled = !spinEnabled;
