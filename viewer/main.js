@@ -1,8 +1,43 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { PLYLoader } from "three/addons/loaders/PLYLoader.js";
 
 const SCAN_DIR = "../scans/";
+
+// PLY parsing + decorating + spacing estimation all happen in a worker so the
+// render loop never blocks on load work.
+const loaderWorker = new Worker(new URL("./loader.worker.js", import.meta.url), { type: "module" });
+let decodeSeq = 0;
+const decodePending = new Map();
+loaderWorker.onmessage = (e) => {
+  const { id, ok } = e.data;
+  const job = decodePending.get(id);
+  if (!job) return;
+  decodePending.delete(id);
+  if (!ok) { job.reject(new Error(e.data.error)); return; }
+  try {
+    job.resolve(wrapDecoded(e.data));
+  } catch (err) {
+    job.reject(err);
+  }
+};
+
+function wrapDecoded(d) {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(d.position, 3));
+  geometry.setAttribute("viewZ", new THREE.BufferAttribute(d.viewZ, 3));
+  geometry.setAttribute("aColor", new THREE.BufferAttribute(d.aColor, 3));
+  geometry.userData.spacing = d.spacing;
+  geometry.userData.thumb = d.thumb;
+  return geometry;
+}
+
+function decodeOnWorker(buf) {
+  return new Promise((resolve, reject) => {
+    const id = ++decodeSeq;
+    decodePending.set(id, { resolve, reject });
+    loaderWorker.postMessage({ id, buf }, [buf]);
+  });
+}
 
 const app = document.getElementById("app");
 const statsEl = document.getElementById("stats");
@@ -93,37 +128,6 @@ void main() {
 
 let points = null;
 
-function decorateGeometry(geometry) {
-  if (geometry.hasAttribute("viewZ") && geometry.hasAttribute("aColor")) return geometry;
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox;
-  const lo = box.min.z, hi = box.max.z, span = Math.max(hi - lo, 1e-9);
-  const pos = geometry.attributes.position;
-  const n = pos.count;
-  const viewZ = pos.array.slice();
-  for (let i = 0; i < n; i++) viewZ[i * 3 + 2] = (pos.getZ(i) - lo) / span;
-  geometry.setAttribute("viewZ", new THREE.BufferAttribute(viewZ, 3));
-
-  // Vertex colors: PLYLoader emits a 3- or 4-component normalized `color`
-  // attribute (or none). Fold it into a stable vec3 `aColor`.
-  const hasColor = geometry.hasAttribute("color") && geometry.getAttribute("color").array.length >= n * 3;
-  const aColor = new Float32Array(n * 3);
-  if (hasColor) {
-    const src = geometry.getAttribute("color").array;
-    const comps = Math.floor(geometry.getAttribute("color").array.length / n);
-    for (let i = 0; i < n; i++) {
-      aColor[i * 3] = src[i * comps];
-      aColor[i * 3 + 1] = src[i * comps + 1];
-      aColor[i * 3 + 2] = src[i * comps + 2];
-    }
-  } else {
-    aColor.fill(1.0); // light gray fallback
-  }
-  geometry.setAttribute("aColor", new THREE.BufferAttribute(aColor, 3));
-  geometry.deleteAttribute("color");
-  return geometry;
-}
-
 function makeMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -165,55 +169,6 @@ function applyFilters() {
 let lastSpacing = null;
 let sizeTouched = false;
 
-function estimateSpacing(geometry) {
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox;
-  const pos = geometry.attributes.position;
-  const n = pos.count;
-  const sz = box.getSize(new THREE.Vector3());
-  const vol = Math.max(sz.x * sz.y * sz.z, 1e-9);
-  const cell = Math.cbrt(vol / n);
-  const MAX_SAMPLE = 20000;
-  const stride = Math.max(1, Math.round(n / MAX_SAMPLE));
-  const inv = 1 / Math.max(cell, 1e-9);
-  const grid = new Map();
-  const MAX_PER_CELL = 8;
-  const key = (a, b, c) => a + "," + b + "," + c;
-  for (let i = 0; i < n; i += stride) {
-    const k = key(Math.floor(pos.getX(i) * inv), Math.floor(pos.getY(i) * inv), Math.floor(pos.getZ(i) * inv));
-    let bucket = grid.get(k);
-    if (!bucket) { bucket = []; grid.set(k, bucket); }
-    if (bucket.length < MAX_PER_CELL) bucket.push(i);
-  }
-  let sum = 0, count = 0;
-  for (let i = 0; i < n; i += stride) {
-    const bx = Math.floor(pos.getX(i) * inv);
-    const by = Math.floor(pos.getY(i) * inv);
-    const bz = Math.floor(pos.getZ(i) * inv);
-    const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
-    let best = Infinity;
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dz = -1; dz <= 1; dz++) {
-          const bucket = grid.get(key(bx + dx, by + dy, bz + dz));
-          if (!bucket) continue;
-          for (let t = 0; t < bucket.length; t++) {
-            const j = bucket[t];
-            if (j === i) continue;
-            const dxv = px - pos.getX(j);
-            const dyv = py - pos.getY(j);
-            const dzv = pz - pos.getZ(j);
-            const d2 = dxv * dxv + dyv * dyv + dzv * dzv;
-            if (d2 < best) best = d2;
-          }
-        }
-      }
-    }
-    if (best < Infinity) { sum += Math.sqrt(best); count++; }
-  }
-  return count ? sum / count : cell;
-}
-
 const SIZE_OVERLAP = 1.15;
 
 function sizeFromSpacing(spacing, heightPx, dpr) {
@@ -222,13 +177,12 @@ function sizeFromSpacing(spacing, heightPx, dpr) {
 }
 
 function applyAutoSize(geometry) {
-  lastSpacing = estimateSpacing(geometry);
+  lastSpacing = (geometry.userData && geometry.userData.spacing) || 0.05;
   document.getElementById("size").value = String(sizeFromSpacing(lastSpacing));
   sizeTouched = false;
 }
 
 function processGeometry(geometry, name) {
-  decorateGeometry(geometry);
   applyAutoSize(geometry);
   if (points) { scene.remove(points); points.geometry.dispose(); points.material.dispose(); }
   points = new THREE.Points(geometry, makeMaterial());
@@ -239,11 +193,10 @@ function processGeometry(geometry, name) {
 }
 
 function loadPly(blob, name) {
-  const loader = new PLYLoader();
   blob.arrayBuffer().then((buf) => {
-    processGeometry(loader.parse(buf), name);
-  }).catch((err) => {
-    statsEl.textContent = "failed to load ply: " + err.message;
+    return decodeOnWorker(buf)
+      .then((geometry) => { geometry.userData.name = name; processGeometry(geometry, name); })
+      .catch((err) => { statsEl.textContent = "failed to load ply: " + err.message; });
   });
 }
 
@@ -261,13 +214,9 @@ function loadScanGeometry(name) {
   if (scanCache.has(name)) return Promise.resolve(scanCache.get(name));
   if (inflight.has(name)) return inflight.get(name);
   const p = fetch(scanUrl(name))
-    .then((r) => { if (!r.ok) throw new Error(r.status); return r.blob(); })
-    .then((b) => b.arrayBuffer())
-    .then((buf) => {
-      const g = decorateGeometry(new PLYLoader().parse(buf));
-      scanCache.set(name, g);
-      return g;
-    })
+    .then((r) => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then((buf) => decodeOnWorker(buf))
+    .then((geometry) => { geometry.name = name; scanCache.set(name, geometry); return geometry; })
     .finally(() => inflight.delete(name));
   inflight.set(name, p);
   return p;
@@ -290,6 +239,8 @@ async function discoverScans() {
 
 // ---- thumbnail rendering ----
 
+let thumbGenToken = 0;
+
 const thumbRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 thumbRenderer.setSize(128, 128);
 thumbRenderer.setPixelRatio(1);
@@ -299,13 +250,23 @@ thumbScene.background = new THREE.Color(0x0d0f13);
 const thumbCamera = new THREE.PerspectiveCamera(55, 1, 1e-4, 1000);
 let thumbPoints = null;
 
+function thumbGeometry(data) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(data.position, 3));
+  g.setAttribute("viewZ", new THREE.BufferAttribute(data.viewZ, 3));
+  g.setAttribute("aColor", new THREE.BufferAttribute(data.color, 3));
+  return g;
+}
+
 function generateThumb(geometry) {
-  if (thumbPoints) { thumbScene.remove(thumbPoints); thumbPoints.material.dispose(); }
+  if (!geometry.userData.thumb) return "";
+  if (thumbPoints) { thumbScene.remove(thumbPoints); thumbPoints.geometry.dispose(); thumbPoints.material.dispose(); }
   const material = makeMaterial();
-  material.uniforms.uSize.value = sizeFromSpacing(estimateSpacing(geometry), 128, 1);
-  thumbPoints = new THREE.Points(geometry, material);
+  material.uniforms.uSize.value = sizeFromSpacing(geometry.userData.spacing, 128, 1);
+  const tg = thumbGeometry(geometry.userData.thumb);
+  thumbPoints = new THREE.Points(tg, material);
   thumbScene.add(thumbPoints);
-  frameObject(geometry, thumbCamera);
+  frameObject(tg, thumbCamera);
   thumbRenderer.render(thumbScene, thumbCamera);
   return thumbRenderer.domElement.toDataURL();
 }
@@ -334,27 +295,58 @@ function buildGallery(names) {
 function selectScan(name, item) {
   if (name === activeName && points) return Promise.resolve(points.geometry);
   activeName = name;
+  thumbGenToken++; // pause background thumbnail work, prioritize the click
   document.querySelectorAll(".gallery-item").forEach((el) => {
     el.classList.toggle("active", el === item || el.title === name);
   });
   return loadScanGeometry(name)
     .then((geometry) => processGeometry(geometry, name))
+    .then(() => restartThumbs())
     .catch((err) => { statsEl.textContent = "failed to load " + name + ": " + err.message; });
 }
 
-async function generateThumbs(names, cards) {
+async function runThumbLoop(names, cards) {
+  const token = ++thumbGenToken;
+  const halted = () => token !== thumbGenToken || document.hidden;
   for (const name of names) {
     const card = cards.get(name);
-    if (!card) continue;
+    if (!card || card.img.dataset.done) continue;
+    if (halted()) return;
+    await new Promise((r) => requestAnimationFrame(r));
+    if (halted()) return;
+    let ok = false;
     try {
       const geometry = await loadScanGeometry(name);
+      if (halted()) return;
       card.img.src = generateThumb(geometry);
+      ok = true;
     } catch {
-      card.img.alt = "failed to load";
+      ok = false;
     }
-    await new Promise((r) => setTimeout(r, 0));
+    card.img.dataset.done = ok ? "1" : "fail";
+  }
+  if (!halted()) {
+    const pending = names.filter((n) => {
+      const c = cards.get(n);
+      return c && !c.img.dataset.done;
+    });
+    if (pending.length) runThumbLoop(pending, cards);
   }
 }
+
+function restartThumbs() {
+  if (document.hidden) return;
+  const pending = galleryNames.filter((n) => {
+    const c = galleryCards.get(n);
+    return c && !c.img.dataset.done;
+  });
+  if (pending.length) runThumbLoop(pending, galleryCards);
+}
+
+document.addEventListener("visibilitychange", () => { if (!document.hidden) restartThumbs(); });
+
+let galleryNames = [];
+let galleryCards = new Map();
 
 async function init() {
   const names = await discoverScans();
@@ -362,12 +354,13 @@ async function init() {
     document.body.classList.add("no-gallery");
     return;
   }
-  const cards = buildGallery(names);
+  galleryNames = names;
+  galleryCards = buildGallery(names);
   const primary = names.includes("scan.ply") ? "scan.ply" : names[0];
-  const primaryCard = cards.get(primary);
+  const primaryCard = galleryCards.get(primary);
   if (primaryCard) primaryCard.item.classList.add("active");
-  selectScan(primary, primaryCard ? primaryCard.item : null);
-  generateThumbs(names, cards);
+  await selectScan(primary, primaryCard ? primaryCard.item : null);
+  restartThumbs();
 }
 
 // ---- UI wiring ----
