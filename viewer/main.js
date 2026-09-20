@@ -384,10 +384,6 @@ function syncGalleryAnchor() {
 document.getElementById("fit").addEventListener("click", () => {
   if (points) { fitTo(points.geometry); scheduleIdleSpin(); }
 });
-document.getElementById("bg").addEventListener("click", () => {
-  const dark = scene.background.getHex() === 0x121212;
-  scene.background = new THREE.Color(dark ? 0xeceff4 : 0x121212);
-});
 const menuBtn = document.getElementById("menu");
 if (menuBtn) {
   const updateMenu = () => {
