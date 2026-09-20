@@ -133,8 +133,8 @@ function makeMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
       uSize: { value: parseFloat(document.getElementById("size").value) },
-      uNear: { value: parseFloat(document.getElementById("near").value) },
-      uFar: { value: parseFloat(document.getElementById("far").value) },
+      uNear: { value: 0.0 },
+      uFar: { value: 1.0 },
     },
     vertexShader: VERT,
     fragmentShader: FRAG,
@@ -167,12 +167,6 @@ function fitTo(geometry) {
   controls.target.copy(center);
   frameObject(geometry, camera, true);
   controls.update();
-}
-
-function applyFilters() {
-  if (!points) return;
-  points.material.uniforms.uNear.value = parseFloat(document.getElementById("near").value);
-  points.material.uniforms.uFar.value = parseFloat(document.getElementById("far").value);
 }
 
 let lastSpacing = null;
@@ -381,9 +375,6 @@ function syncGalleryAnchor() {
 
 // ---- UI wiring ----
 
-document.getElementById("fit").addEventListener("click", () => {
-  if (points) { fitTo(points.geometry); scheduleIdleSpin(); }
-});
 const menuBtn = document.getElementById("menu");
 if (menuBtn) {
   const updateMenu = () => {
@@ -398,8 +389,6 @@ document.getElementById("size").addEventListener("input", (e) => {
   sizeTouched = true;
   if (points) points.material.uniforms.uSize.value = parseFloat(e.target.value);
 });
-document.getElementById("near").addEventListener("input", applyFilters);
-document.getElementById("far").addEventListener("input", applyFilters);
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
