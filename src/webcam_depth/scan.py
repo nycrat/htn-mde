@@ -286,7 +286,7 @@ def scan_image(
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="scan-depth",
-        description="Emit a colored 3D point cloud (.ply) from mono depth, then view it in viewer/index.html.",
+        description="Emit a colored 3D point cloud (.ply) from mono depth; view it with .venv/bin/python -m http.server 8000.",
     )
     p.add_argument("-o", "--out", default="scan.ply", help="output .ply path (default scan.ply)")
     p.add_argument("--image", metavar="PATH", help="scan a single image instead of the webcam")
@@ -461,7 +461,7 @@ def main(argv: list[str] | None = None) -> int:
                 keep=tuple(args.keep),
                 out_path=args.out,
             )
-        print(f"[done] open viewer/index.html and load {args.out}")
+        print(f"[done] view it: .venv/bin/python -m http.server 8000  # then open http://localhost:8000/viewer/ and load {args.out}")
         return 0
     except (RuntimeError, ValueError) as exc:
         print(f"[error] {exc}", file=sys.stderr)

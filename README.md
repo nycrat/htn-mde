@@ -57,7 +57,7 @@ Inference uses the Metal Performance Shaders backend (`mps`) when available.
 
 ## 3D scan (colored point cloud)
 
-Emit a colored `.ply` point cloud from mono depth, then view it in `viewer/index.html` (Three.js WebGL).
+Emit a colored `.ply` point cloud from mono depth, then view it in the Three.js WebGL viewer.
 
 ```bash
 # single image -> scan.ply
@@ -73,16 +73,17 @@ Emit a colored `.ply` point cloud from mono depth, then view it in `viewer/index
 Tuning: `--fov 60` (camera horizontal FOV), `--stride 1` (full detail), `--keep 0.01 0.99`
 (depth quantile range), `--encoder vits` (faster capture).
 
-View it. Open the viewer from the repo root so it can auto-load `scan.ply`:
+View it. Serve the viewer from the repo root, then open the scans gallery:
 
 ```bash
-python3 -m http.server 8000     # from the repo root
-open http://localhost:8000/viewer/index.html
+.venv/bin/python -m http.server 8000
+open http://localhost:8000/viewer/
 ```
 
-Or double-click `viewer/index.html` and pick/drag `scan.ply` in (auto-load is disabled on
-`file://` for browser security). Drag to orbit, scroll to zoom, near/far sliders slice
-depth layers.
+`.ply` files in `scans/` appear as a thumbnail gallery — click one to load it. The
+viewer must be served over `http://` (not opened as a `file://` double-click), since
+it fetches the gallery listing and scan files. Drag to orbit, scroll to zoom, near/far
+sliders slice depth layers.
 
 Note: webcam depth is relative — the point cloud is correctly shaped but
 arbitrarily scaled. The sweep mode uses the turntable assumption (camera spinning
